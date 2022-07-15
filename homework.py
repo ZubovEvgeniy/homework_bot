@@ -45,7 +45,7 @@ def send_message(bot, message):
         logger.error(f'Ошибка: {error}')
 
 
-def get_api_answer(ENDPOINT, current_timestamp) -> list:
+def get_api_answer(current_timestamp):
     """Возвращает ответ API приведенный в json"""
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
@@ -68,30 +68,24 @@ def get_api_answer(ENDPOINT, current_timestamp) -> list:
 
 def check_response(response):
     """Проверка ответа API на корректность."""
-    homeworks = response.get('homeworks')
-    if homeworks is None:
-        raise CustomError("Нет списка 'homework'")
-    if not isinstance(homeworks, list):
-        raise CustomError("Неверный формат 'homework'")
-    if not homeworks:
-        return False
-    status = response['homeworks'][0].get('status')
-    if status in HOMEWORK_STATUSES:
+    if isinstance(response['homeworks'], list):
+        logger.info('Формат ответа соответствует ожидаемому')
         return response['homeworks']
-    else:
-        raise CustomError('Нет статуса работы')
+    logger.error('Формат ответа НЕ соответствует ожидаемому')
+    raise CustomError
 
 
 def parse_status(homework):
     """Получение статуса домашней работы."""
     homework_name = homework.get('homework_name')
-    if homework_name is None:
-        raise CustomError('Нет имени домашней работы')
-    status = homework.get('status')
-    if status is None:
-        raise CustomError('Нет статуса домашней работы')
-    verdict = HOMEWORK_STATUSES[status]
-    return f'Изменился статус домашней работы "{homework_name}". {verdict}'
+    try:
+        homework_name = homework['homework_name']
+        homework_status = homework['status']
+        verdict = HOMEWORK_STATUSES[homework_status]
+        return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+    except KeyError as error:
+        logger.error(f'Неожиданный статус работы! {error}')
+        raise KeyError
 
 
 def check_tokens():
@@ -112,7 +106,7 @@ def main():
     errors = False
     while True:
         try:
-            get_result = get_api_answer(ENDPOINT, current_timestamp)
+            get_result = get_api_answer(current_timestamp)
             check_result = check_response(get_result)
             if check_result:
                 message = parse_status(check_result)
