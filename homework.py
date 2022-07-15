@@ -46,7 +46,7 @@ def send_message(bot, message):
 
 
 def get_api_answer(current_timestamp):
-    """Возвращает ответ API приведенный в json"""
+    """Возвращает ответ API приведенный в json."""
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
     try:
@@ -89,6 +89,7 @@ def parse_status(homework):
 
 
 def check_tokens():
+    """Проверка токенов."""
     if PRACTICUM_TOKEN is None:
         return False
     elif TELEGRAM_TOKEN is None:
