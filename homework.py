@@ -2,12 +2,13 @@ import logging
 import os
 import time
 from http import HTTPStatus
+import statuses
+import telegram
 
 import requests
 from dotenv import load_dotenv
-import telegram
 
-from exceptions import CustomError
+import exceptions
 
 load_dotenv()
 
@@ -40,7 +41,7 @@ def send_message(bot, message):
     """Отправка сообщений в диалог."""
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-        logger.info('Сообщение в чат {TELEGRAM_CHAT_ID}: {message}')
+        logger.info(f'Сообщение в чат {TELEGRAM_CHAT_ID}: {message}')
     except telegram.error.TelegramError as error:
         logger.error(f'Ошибка: {error}')
 
@@ -59,11 +60,13 @@ def get_api_answer(current_timestamp):
             logger.info(f'Получен ответ от API {response.json()}')
             return response.json()
         else:
-            logger.error('Сбой при запросе к эндпоинту!')
-            raise CustomError('Сбой при запросе к API!')
+            logger.error(f'Сбой при запросе к эндпоинту!'
+                         f'Ошибка: {response.status_code, response.text}')
+            raise exceptions.TakeAPIError('Сбой при запросе к API!')
     except Exception as error:
-        logger.error('Сбой при запросе к эндпоинту!')
-        raise CustomError(f'Сбой при запросе к API! {error}')
+        logger.error(f'Сбой при запросе к эндпоинту!'
+                     f'Ошибка: {response.status_code, response.text}')
+        raise exceptions.TakeAPIError(f'Сбой при запросе к API! {error}')
 
 
 def check_response(response):
@@ -72,7 +75,7 @@ def check_response(response):
         logger.info('Формат ответа соответствует ожидаемому')
         return response['homeworks']
     logger.error('Формат ответа НЕ соответствует ожидаемому')
-    raise CustomError
+    raise exceptions.TrueAPIError
 
 
 def parse_status(homework):
@@ -81,7 +84,7 @@ def parse_status(homework):
     try:
         homework_name = homework['homework_name']
         homework_status = homework['status']
-        verdict = HOMEWORK_STATUSES[homework_status]
+        verdict = statuses.HOMEWORK_STATUSES[homework_status]
         return f'Изменился статус проверки работы "{homework_name}". {verdict}'
     except KeyError as error:
         logger.error(f'Неожиданный статус работы! {error}')
@@ -90,14 +93,8 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверка токенов."""
-    if PRACTICUM_TOKEN is None:
-        return False
-    elif TELEGRAM_TOKEN is None:
-        return False
-    elif TELEGRAM_CHAT_ID is None:
-        return False
-    else:
-        return True
+    token_list = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
+    return all(token_list)
 
 
 def main():
@@ -107,18 +104,24 @@ def main():
     errors = False
     while True:
         try:
-            get_result = get_api_answer(current_timestamp)
-            check_result = check_response(get_result)
-            if check_result:
-                message = parse_status(check_result)
-                send_message(bot, message)
-            time.sleep(RETRY_TIME)
+            if check_tokens():
+                get_result = get_api_answer(current_timestamp)
+                check_result = check_response(get_result)
+                if check_result:
+                    message = parse_status(check_result)
+                    send_message(bot, message)
+            else:
+                logger.critical('Отсутствуют переменные окружения')
+                raise Exception('Отсутствуют переменные окружения')
+
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             if errors:
                 errors = False
                 send_message(bot, message)
             logger.critical(message)
+
+        finally:
             time.sleep(RETRY_TIME)
 
 
