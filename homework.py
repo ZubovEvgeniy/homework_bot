@@ -99,20 +99,19 @@ def check_tokens():
 
 def main():
     """Основная логика работы бота."""
+    if not check_tokens():
+        logger.critical('Отсутствуют переменные окружения')
+        raise Exception('Отсутствуют переменные окружения')
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
     errors = False
     while True:
         try:
-            if check_tokens():
-                get_result = get_api_answer(current_timestamp)
-                check_result = check_response(get_result)
-                if check_result:
-                    message = parse_status(check_result)
-                    send_message(bot, message)
-            else:
-                logger.critical('Отсутствуют переменные окружения')
-                raise Exception('Отсутствуют переменные окружения')
+            get_result = get_api_answer(current_timestamp)
+            check_result = check_response(get_result)
+            if check_result:
+                message = parse_status(check_result)
+                send_message(bot, message)
 
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
